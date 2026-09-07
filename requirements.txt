@@ -1,0 +1,14 @@
+streamlit
+pandas
+numpy
+openpyxl
+yfinance
+pytz
+tzdata
+beautifulsoup4
+requests
+multitasking
+frozendict
+peewee
+curl_cffi
+websockets
