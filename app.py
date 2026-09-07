@@ -15,17 +15,42 @@ RESULT_DIR = Path("results")
 RESULT_DIR.mkdir(exist_ok=True)
 
 
-def load_latest_result(kind):
-    """Load the most recent timestamped result file for a given scan kind."""
+def get_latest_result_info(kind):
+    """Get the latest result file and its timestamp."""
     pattern = RESULT_DIR / f"{kind}_*.csv"
     files = sorted(glob.glob(str(pattern)), key=lambda x: Path(x).stat().st_mtime)
     
     if not files:
-        return pd.DataFrame()
+        return None, None
     
-    latest_file = files[-1]  # Get the most recent file
+    latest_file = files[-1]
     try:
-        return pd.read_csv(latest_file)
+        df = pd.read_csv(latest_file)
+        # Extract timestamp from filename (format: kind_YYYYMMDD_HHMMSS.csv)
+        filename = Path(latest_file).stem
+        parts = filename.split('_')
+        if len(parts) >= 3:
+            date_part = parts[-2]
+            time_part = parts[-1]
+            timestamp_str = f"{date_part[:4]}-{date_part[4:6]}-{date_part[6:8]} {time_part[:2]}:{time_part[2:4]}:{time_part[4:6]}"
+        else:
+            timestamp_str = "Unknown"
+        return df, timestamp_str
+    except Exception:
+        return None, None
+
+
+def get_all_results(kind):
+    """Get all available result files for a given scan kind."""
+    pattern = RESULT_DIR / f"{kind}_*.csv"
+    files = sorted(glob.glob(str(pattern)), key=lambda x: Path(x).stat().st_mtime, reverse=True)
+    return files
+
+
+def load_result_file(filepath):
+    """Load a specific result file."""
+    try:
+        return pd.read_csv(filepath)
     except Exception:
         return pd.DataFrame()
 
@@ -94,22 +119,78 @@ with st.expander("Run scan now"):
 tab1, tab2 = st.tabs(["09:30 Initial Scan", "10:00 Confirmation"])
 
 with tab1:
-    df = load_latest_result("scan_0930")
-    if df.empty:
+    df, scan_time = get_latest_result_info("scan_0930")
+    if df is None or df.empty:
         st.info("09:30 scan result is not available yet.")
     else:
-        st.success(f"Loaded {len(df)} stocks")
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.success(f"✅ Loaded {len(df)} stocks")
+        with col2:
+            st.caption(f"📅 Scanned at: {scan_time}")
+        
+        # Get all available scans for this kind
+        all_files = get_all_results("scan_0930")
+        if len(all_files) > 1:
+            with st.expander(f"📊 View Previous Scans ({len(all_files) - 1} more)"):
+                selected_file = st.selectbox(
+                    "Select a previous scan",
+                    all_files[1:],  # Skip the latest one
+                    format_func=lambda x: Path(x).stem.replace('scan_0930_', ''),
+                    key="prev_0930"
+                )
+                if selected_file:
+                    prev_df = load_result_file(selected_file)
+                    filename = Path(selected_file).stem
+                    parts = filename.split('_')
+                    if len(parts) >= 3:
+                        date_part = parts[-2]
+                        time_part = parts[-1]
+                        prev_time = f"{date_part[:4]}-{date_part[4:6]}-{date_part[6:8]} {time_part[:2]}:{time_part[2:4]}:{time_part[4:6]}"
+                    else:
+                        prev_time = "Unknown"
+                    st.caption(f"📅 Scanned at: {prev_time}")
+                    st.dataframe(prev_df, use_container_width=True, hide_index=True)
+        
         signal = st.selectbox("Signal", ["ALL", "SELECTED BUY", "SELECTED SELL", "WATCH BUY", "WATCH SELL", "NOT SELECTED"], key="s1")
         view = df if (signal == "ALL" or "Signal" not in df.columns) else df[df["Signal"] == signal]
         st.dataframe(view, use_container_width=True, hide_index=True)
         st.download_button("Download CSV", view.to_csv(index=False), "Nifty500_0930.csv", "text/csv")
 
 with tab2:
-    df = load_latest_result("scan_1000")
-    if df.empty:
+    df, scan_time = get_latest_result_info("scan_1000")
+    if df is None or df.empty:
         st.info("10:00 confirmation scan result is not available yet.")
     else:
-        st.success(f"Loaded {len(df)} stocks")
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.success(f"✅ Loaded {len(df)} stocks")
+        with col2:
+            st.caption(f"📅 Scanned at: {scan_time}")
+        
+        # Get all available scans for this kind
+        all_files = get_all_results("scan_1000")
+        if len(all_files) > 1:
+            with st.expander(f"📊 View Previous Scans ({len(all_files) - 1} more)"):
+                selected_file = st.selectbox(
+                    "Select a previous scan",
+                    all_files[1:],  # Skip the latest one
+                    format_func=lambda x: Path(x).stem.replace('scan_1000_', ''),
+                    key="prev_1000"
+                )
+                if selected_file:
+                    prev_df = load_result_file(selected_file)
+                    filename = Path(selected_file).stem
+                    parts = filename.split('_')
+                    if len(parts) >= 3:
+                        date_part = parts[-2]
+                        time_part = parts[-1]
+                        prev_time = f"{date_part[:4]}-{date_part[4:6]}-{date_part[6:8]} {time_part[:2]}:{time_part[2:4]}:{time_part[4:6]}"
+                    else:
+                        prev_time = "Unknown"
+                    st.caption(f"📅 Scanned at: {prev_time}")
+                    st.dataframe(prev_df, use_container_width=True, hide_index=True)
+        
         signal = st.selectbox("Signal", ["ALL", "CONFIRMED BUY", "CONFIRMED SELL", "NEW BUY", "NEW SELL", "REJECTED", "WATCH"], key="s2")
         view = df if (signal == "ALL" or "Confirmation" not in df.columns) else df[df["Confirmation"] == signal]
         st.dataframe(view, use_container_width=True, hide_index=True)
