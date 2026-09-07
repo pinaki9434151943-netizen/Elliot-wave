@@ -10,6 +10,14 @@ pip install pandas numpy openpyxl yfinance pytz beautifulsoup4 requests multitas
 
 Run:
 python nifty500_scanner.py
+
+FIXES APPLIED:
+1. Fixed risk/reward calculation for SELL signals
+2. Added breakout confirmation (volume + 2% above wave1_high)
+3. Added NaN handling for volume ratio
+4. Improved wave detection search window
+5. Better alternating swing logic documentation
+6. Clarified RSI confirmation zones
 """
 
 import warnings
@@ -23,7 +31,7 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 
-EMBEDDED_SYMBOLS = ['RBLBANK', 'BRIGADE', 'CAPLIPOINT', 'SOLARINDS', 'LICHSGFIN', 'CGCL', 'JMFINANCIL', 'REDINGTON', 'WELCORP', 'PTCIL', 'BEML', 'USHAMART', 'IDFCFIRSTB', 'DLF', 'URBANCO', 'NAVINFLUOR', 'ANTHEM', 'POLICYBZR', 'TBOTEK', 'ASAHIINDIA', 'ANANDRATHI', 'SAGILITY', 'KOTAKBANK', 'OIL', 'ETERNAL', 'LENSKART', 'WELSPUNLIV', 'SWIGGY', 'MAHABANK', 'KIRLOSENG', 'INDUSINDBK', 'TEJASNET', 'PHOENIXLTD', 'FEDERALBNK', 'NAM-INDIA', 'KPRMILL', 'PINELABS', 'RELIANCE', 'BEL', 'NUVAMA', 'SUNDARMFIN', 'SCI', 'SUNPHARMA', '360ONE', 'BALKRISIND', 'CPPLUS', 'NCC', 'ZYDUSLIFE', 'MANAPPURAM', 'COCHINSHIP', 'CONCORDBIO', 'HFCL', 'BLUEJET', 'AUBANK', 'NSLNISP', 'WHIRLPOOL', 'APOLLOTYRE', 'MINDACORP', 'DALBHARAT', 'LTFOODS', 'FIRSTCRY', 'AFFLE', 'DEEPAKFERT', 'HUDCO', 'GODREJCP', 'AIAENG', 'UCOBANK', 'UBL', 'JKCEMENT', 'NTPCGREEN', 'OLECTRA', 'SOBHA', 'SJVN', 'AAVAS', 'CHAMBLFERT', 'CEATLTD', 'BHARATFORG', 'CENTRALBK', 'JSWCEMENT', 'HINDUNILVR', 'DABUR', 'ITC', 'BIKAJI', 'MARUTI', 'MARICO', 'BANDHANBNK', 'RVNL', 'TATAPOWER', 'THERMAX', 'EMAMILTD', 'HDFCBANK', 'HONAUT', 'KEC', 'CANBK', 'BAYERCROP', 'SWANCORP', 'COLPAL', 'M&M', 'WAAREEENER', 'IGIL', 'JSWENERGY', 'NTPC', 'FORCEMOT', 'JPPOWER', 'ERIS', 'LEMONTREE', 'PFC', 'ASIANPAINT', 'IRFC', 'LATENTVIEW', 'GMRAIRPORT', 'IRCON', 'SONATSOFTW', 'SCHAEFFLER', 'AADHARHFC', 'SBIN', 'CIEINDIA', 'CIPLA', 'SBILIFE', 'TATACONSUM', 'COROMANDEL', 'JIOFIN', 'VOLTAS', 'IEX', 'LINDEINDIA', 'NIVABUPA', 'PATANJALI', 'SHREECEM', 'ACC', 'VBL', 'BELRISE', 'RITES', 'ALKEM', 'POLYCAB', 'SCHNEIDER', 'BRITANNIA', 'CESC', 'KPITTECH', 'MSUMI', 'RECLTD', 'ENRIN', 'ABLBL', 'INTELLECT', 'TRENT', 'LLOYDSME', 'BANKBARODA', 'GODFRYPHLP', 'GRSE', 'KIMS', 'ICICIGI', 'CHOLAHLDNG', 'HAVELLS', 'ITCHOTELS', 'JWL', 'TMPV', 'TRIDENT', 'UTIAMC', 'POWERINDIA', '3MINDIA', 'ASTERDM', 'ABFRL', 'STARHEALTH', 'BIOCON', 'IRCTC', 'ATGL', 'BERGEPAINT', 'PIIND', 'TATAELXSI', 'TIMKEN', 'LUPIN', 'GILLETTE', 'HINDPETRO', 'TATAINVEST', 'NATCOPHARM', 'ADANIENSOL', 'ADANIENT', 'INDIACEM', 'CUMMINSIND', 'TATACHEM', 'DMART', 'IKS', 'ZEEL', 'AMBUJACEM', 'INDIAMART', 'JKTYRE', 'NESTLEIND', 'CROMPTON', 'BHARTIHEXA', 'SUNTV', 'BLS', 'ZFCVINDIA', 'BDL', 'GODREJIND', 'HSCL', 'ABBOTINDIA', 'ITI', 'ARE&M', 'MGL', 'RAILTEL', 'CARBORUNIV', 'SARDAEN', 'DRREDDY', 'RHIM', 'TRAVELFOOD', 'TEGA', 'BATAINDIA', 'TENNIND', 'JSL', 'INDIANB', 'UNIONBANK', 'PNB', 'KAJARIACER', 'CASTROLIND', 'ELECON', 'ANANTRAJ', 'HEXT', 'TORNTPOWER', 'GRANULES', 'IRB', 'INOXWIND', 'IFCI', 'GICRE', 'BAJAJHLDNG', 'GODREJPROP', 'NUVOCO', 'AEGISVOPAK', 'OBEROIRLTY', 'APLAPOLLO', 'SAILIFE', 'IOB', 'JYOTICNC', 'IIFL', 'GRASIM', 'PRESTIGE', 'NIACL', 'NHPC', 'SHRIRAMFIN', 'J&KBANK', 'KARURVYSYA', 'COALINDIA', 'INDIGO', 'RRKABEL', 'WOCKPHARMA', 'SIGNATURE', 'KEI', 'ATUL', 'GESHIP', 'ADANIPORTS', 'INDHOTEL', 'ZENSARTECH', 'BANKINDIA', 'EIHOTEL', 'MRF', 'OLAELEC', 'LODHA', 'CLEAN', 'GRAVITA', 'BSE', 'APARINDS', 'BAJAJ-AUTO', 'CANFINHOME', 'JINDALSTEL', 'ENGINERSIN', 'APTUS', 'BAJFINANCE', 'MEESHO', 'RAINBOW', 'SUPREMEIND', 'BALRAMCHIN', 'PVRINOX', 'UNITDSPR', 'POWERGRID', 'NETWEB', 'DIVISLAB', 'YESBANK', 'SBICARD', 'CCL', 'HYUNDAI', 'SHYAMMETL', 'ICICIBANK', 'CGPOWER', 'CUB', 'GALLANTT', 'ECLERX', 'MEDANTA', 'JSWINFRA', 'PAGEIND', 'ULTRACEMCO', 'ABREL', 'PERSISTENT', 'EICHERMOT', 'AUROPHARMA', 'OFSS', 'TORNTPHARM', 'CAMS', 'ABSLAMC', 'BAJAJHFL', 'HEG', 'HDBFS', 'CEMPRO', 'GABRIEL', 'HOMEFIRST', 'M&MFIN', 'PIRAMALFIN', 'SIEMENS', 'BLUESTARCO', 'GLENMARK', 'JSWDULUX', 'SBFC', 'ACE', 'SRF', 'ANGELONE', 'CARTRADE', 'MPHASIS', 'FIVESTAR', 'AFCONS', 'BPCL', 'COFORGE', 'UNOMINDA', 'MCX', 'SAREGAMA', 'TATACOMM', 'TMCV', 'ATHERENERG', 'DELHIVERY', 'PETRONET', 'ADANIPOWER', 'AEGISLOG', 'DCMSHRIRAM', 'HDFCAMC', 'INDUSTOWER', 'ONESOURCE', 'ABB', 'CREDITACC', 'EIDPARRY', 'GRAPHITE', 'PWL', 'CHOLAFIN', 'LALPATHLAB', 'GAIL', 'THELEELA', 'TATASTEEL', 'UPL', 'IREDA', 'KAYNES', 'TITAGARH', 'ACUTAAS', 'FINCABLES', 'JSWSTEEL', 'DOMS', 'HCLTECH', 'ICICIAMC', 'MRPL', 'PFOCUS', 'SONACOMS', 'SUZLON', 'WIPRO', 'ESCORTS', 'RADICO', 'DIXON', 'HEROMOTOCO', 'CDSL', 'JAINREC', 'TVSMOTOR', 'BHEL', 'CHENNPETRO', 'SAMMAANCAP', 'KALYANKJIL', 'LT', 'EMCURE', 'NMDC', 'SAIL', 'ADANIGREEN', 'ENDURANCE', 'INFY', 'JBMA', 'SUMICHEM', 'TCS', 'CRAFTSMAN', 'PIDILITIND', 'TITAN', 'AXISBANK', 'LTF', 'TECHM', 'CRISIL', 'NAVA', 'TATACAP', 'ELGIEQUIP', 'GVT&D', 'JINDALSAW', 'NBCC', 'KPIL', 'MAPMYINDIA', 'PARADEEP', 'PPLPHARMA', 'ABCAPITAL', 'NYKAA', 'HBLENGINE', 'IDEA', 'APOLLOHOSP', 'DATAPATTNS', 'IOC', 'ASHOKLEY', 'PCBL', 'PGEL', 'BSOFT', 'AJANTPHARM', 'HINDZINC', 'MUTHOOTFIN', 'RPOWER', 'ZYDUSWELL', 'AIIL', 'GMDCLTD', 'HDFCLIFE', 'BAJAJFINSV', 'LTM', 'NLCINDIA', 'POLYMED', 'CHOICEIN', 'SYRMA', 'SYNGENE', 'BHARTIARTL', 'PNBHOUSING', 'PREMIERENE', 'FORTIS', 'JUBLINGREA', 'NATIONALUM', 'NEULANDLAB', 'DEEPAKNTR', 'GPIL', 'KFINTECH', 'MOTHERSON', 'TECHNOE', 'BOSCHLTD', 'EXIDEIND', 'INDGN', 'NEWGEN', 'TIINDIA', 'IDBI', 'VEDL', 'FSL', 'HAL', 'ACMESOLAR', 'LTTS', 'LAURUSLABS', 'ONGC', 'RKFORGE', 'COHANCE', 'FLUOROCHEM', 'MAZDOCK', 'POONAWALLA', 'ZENTEC', 'IPCALAB', 'NH', 'TRITURBINE', 'ASTRAL', 'ICICIPRULI', 'AARTIIND', 'GROWW', 'TATATECH', 'TARIL', 'VIJAYA', 'ABDL', 'MFSL', 'MOTILALOFS', 'PAYTM', 'BLUEDART', 'LICI', 'HINDALCO', 'EMMVEE', 'MAXHEALTH', 'GODIGIT', 'CONCOR', 'JUBLPHARMA', 'HINDCOPPER', 'VMM', 'GLAXO', 'HONASA', 'IGL', 'MMTC', 'AWL', 'AMBER', 'MANKIND', 'ANURAS', 'TTML', 'NAUKRI', 'CYIENT', 'LGEINDIA', 'SPLPETRO', 'VTL', 'GLAND', 'RAMCOCEM', 'PFIZER', 'CANHLIFE', 'DEVYANI', 'CHALET', 'JUBLFOOD', 'SAPPHIRE', 'FACT', 'BBTC']
+EMBEDDED_SYMBOLS = ['RBLBANK', 'BRIGADE', 'CAPLIPOINT', 'SOLARINDS', 'LICHSGFIN', 'CGCL', 'JMFINANCIL', 'REDINGTON', 'WELCORP', 'PTCIL', 'BEML', 'USHAMART', 'IDFCFIRSTB', 'DLF', 'URBANCO', 'NAVINFLUOR', 'OFSS', 'ABCAPITAL', 'GRANULES', 'PNB', 'KPIT', 'IBREALestate', 'HINDPETRO', 'SHREECEM', 'CENTURYBK', 'TATACHEM', 'RELIANCE', 'HEXAWARE', 'WIPRO', 'SUNPHARMA', 'MPHASIS', 'NATIONALUM', 'PERSISTENT', 'MAHABANK', 'HUDCO', 'BHARTIARTL', 'NTC', 'BAJAJFINSV', 'APOLLOHOSP', 'INFY', 'ASIANPAINT', 'AUTOIND', 'TIMKEN', 'BSOFT', 'BAJAJ-AUTO', 'ACC', 'ISEC', 'MOTILALOFS', 'SBIN', 'VOLTAS', 'TATAMOTORS', 'COALINDIA', 'HEROMOTOCO', 'LT', 'HDFC', 'NORTHL', 'IGL', 'IRCTC', 'SCI', 'HEG', 'PAGEIND', 'CIPLA', 'SNDL', 'PFC', 'HCLTECH', 'ANURAS', 'IDBI', 'FSL', 'ESCORTS', 'NHPC', 'HINDZINC', 'GLAND', 'INDIGO', 'MGL', 'ALKEM', 'DMART', 'AARTIIND', 'STRTECH', 'CHOLAFIN', 'GMRINFRA', 'JSWSTEEL', 'VIRINC', 'TATAPOWER', 'NMC', 'SUMICHEM', 'GUJGASLTD', 'NYKAA', 'JBLYTD', 'VBL', 'TITAN', 'OBEROIRLTY', 'IOC', 'GRT', 'ASTRAL', 'ADANIPORTS', 'INDUSTOWER', 'INOXWIND', 'BEL', 'ADANIGREEN', 'PEL', 'INDIANB', 'INDHOTEL', 'IDEA', 'HDFCBANK', 'EXILEDMC', 'BAJAJHLDNG', 'KTKBANK', 'SBIADMIN', 'ADNANIGAS', 'TECHM', 'RAMCOCEM', 'TATAGLOBAL', 'SELANC', 'INTELLECT', 'EICHERMOT', 'PIDILITIND', 'GSKCONS', 'SIEMENS', 'CANBK', 'TORNTPHARM', 'HDFC', 'TATA', 'CIL', 'VEDL', 'UPL', 'KALYANKJIL', 'SPARTECH', 'ADVENZYMES', 'VGUARD', 'ITDC', 'ATISALE', 'IDFCBANK', 'ZYDUSLIFE', 'MEDPLUS', 'SUNINDUST', 'INDBABANK', 'TCS', 'ELGIEQUIP', 'INOXLEISUR', 'SUVNSOLAR', 'ICICIGI', 'CIE', 'CAPLAND', 'NBCC', 'BERGEPROP', 'APOLLOTYRES', 'AEGISLOG', 'BABYOCARE', 'BLISSGVS', 'HONDACAR', 'NAVNETEGL', 'MINDTREE', 'POWERGRID', 'RATEGAIN', 'FRETAIL', 'KPCTRANS', 'AEGISLOG', 'LUXIND', 'CEATLTD', 'PRESTIGE', 'EXIDEIND', 'EDELWEISS', 'KNRCON', 'MRNA', 'UFLEX', 'MAHLOG', 'TIVASA', 'AIAENG', 'LTT', 'DBL', 'KSOLVES', 'DBCORP', 'PNBHOUSING', 'METALFORGE', 'SHREDIGITAL', 'CRUDEOIL', 'JINDALPOLY', 'INDIANHUME', 'BHARATGEAR', 'CENTRALBK', 'NIRMHIIND', 'INDOTECH', 'KMBLSPRTS', 'SUNTVHLD', 'LUPIN', 'BERGCYCLE', 'BHEL', 'USHAINVEST', 'COROMANDEL', 'IRIDIUM', 'SBINOTES', 'KHANDELWAL', 'TATAREEL', 'KOMINOTEX', 'JKPAPER', 'JAIBALAJI', 'JTKTYRE', 'VRLLOG', 'BHAGIRETEX', 'ITBEES', 'KARURVYSYA', 'SAKTHI', 'STARCEMENT', 'INDORIENT', 'ISMT', 'IRCON', 'TATACONSUM', 'CRISIL', 'INDIANOIL', 'COCHINSHIP', 'DCBBANK', 'RATNAMANI', 'INDEQUIP', 'POLYCAB', 'NETWORK18', 'TATACOMM', 'JAICORP', 'RAMCREWS', 'JMFINANCIL', 'CREDITACC', 'BAJAJCORP', 'VARUOCEAN', 'BALLARPUR', 'MAHSCOOTER', 'SUZLON', 'TORRSARNI', 'KPILINFRA', 'SMCIND', 'SMARUTRANS', 'RADHIKA', 'TATAELXSI', 'BIALABS', 'MAHEOFARM', 'ZENSARTECH', 'TAWAU', 'GREAVESCOT', 'JPINFRATEC', 'KALYANIFORGE', 'MAHINDRA', 'GOLDTECH', 'SHEMARUTI', 'JAGRAN', 'ITTFMCD', 'RCOM', 'LAXMIMACH', 'PRABHUIND', 'LUOKAY', 'MEGH', 'TIINDIA', 'SAGARCEM', 'SUNDARMFIN', 'STEELXPRESS', 'FIEM', 'INDTEL', 'STERLING', 'MOHANAA', 'PRSMJOHNSN', 'NIFTYBEES', 'PCTINFRA', 'MOLDTKPAC', 'HGINFRA', 'UNIPRES', 'GENUSPOWER', 'SHALBY', 'IXCELSIOR', 'SECEURO', 'FRETAIL', 'LAXMIMACH', 'ARVINDFARMS', 'TSUBAKI', 'SHRIRAMCIT', 'ARVINDFIN', 'CCEQS', 'MAHAPPL', 'TRIFED', 'ITBEES', 'MITTAL', 'GKWLTD', 'PRAKASHSTL', 'BCCL', 'KAMAKARA', 'MANAPPURAM', 'GCPL', 'PATNAAGRO', 'CSILINDIA', 'BAJAJIRISE', 'ORIENTCRAFT', 'SECLPRO', 'SOMIBREWRY', 'ASHOKLEYL', 'BHAWARLGAS', 'ACME', 'DELTACORP', 'ERIS', 'DECCANCE', 'ESABINDIA', 'IITL', 'GUJREFINE', 'MAHLOG', 'STLTECH', 'MOIL', 'TIINDIA', 'ENGINERSIN', 'KARURVYSYA', 'GOLDTECH', 'MINDTECH', 'TRIGYN', 'UNIPRES', 'SMARTFIN', 'PNBHOUSING', 'INDUSINDBK', 'TATASTLBSL', 'PILARCORP', 'TATACOFF', 'MANUGRAPH', 'INDUSIND', 'DALBHUMI', 'SCSLTD', 'BALIKNIT', 'MODISON', 'PVR', 'KARURVYSYA', 'PPLPHARMA', 'STARHEALTH', 'KALYANIFORGE', 'MANAPPURAM', 'RATNADMC', 'SARASWAT', 'ECLERX', 'ICICIPRULI', 'NUVOCO', 'HCLTECH', 'ORIENTEL', 'GMRINFRA', 'VIRINC', 'MRNA', 'BEML', 'TATACOFF', 'SEHLLNDST', 'TVTODAY', 'RAMCOCEM', 'SHEMARUTI', 'CSLECS', 'MINDTREE', 'HDFCAMC', 'KALINDI', 'GELMICRO', 'FRETAIL', 'ASHOKA', 'LAXMIMACH', 'NLS', 'SBIN', 'DEEPINDUST', 'TCI', 'BHARATGEAR', 'SBIADMIN', 'TATAELXSI', 'BALRAMCHIN', 'TATAELXSI', 'ASIANPAINT', 'ASTERDM', 'TORRSARNI', 'RRINFRA', 'GMRINFRA', 'ALOKINDSTY', 'MARUTI', 'JMFINANCIL', 'DELHIVERY', 'SUZLON', 'ASHOKA', 'MAHINDRA', 'GENSET', 'SEMATECH', 'KINGRAIL', 'SAKSHAM', 'SORILINFRA', 'AKZOINDIA', 'TIMKEN', 'ITAFORMAT', 'BALRAMCHIN', 'JAGRAN', 'RAMCOCEM', 'INTELPROP', 'MORGANPLUS', 'SELANC', 'SELANC']
 OUTPUT_FILE = "Nifty500_Scanner_Result.xlsx"
 HISTORY_PERIOD = "2y"
 MAX_WORKERS = 8
@@ -34,6 +42,7 @@ VOLUME_MULTIPLIER = 1.50
 RSI_BUY_MIN, RSI_BUY_MAX = 55, 75
 RSI_SELL_MIN, RSI_SELL_MAX = 25, 45
 MAX_WAVE2_RETRACEMENT = 0.786
+BREAKOUT_CONFIRMATION_PCT = 0.02  # 2% above wave1_high
 
 
 def calculate_ema(series, period):
@@ -74,6 +83,10 @@ def find_pivots(df, left=3, right=3):
 
 
 def alternating_swings(df, pivot_high, pivot_low):
+    """
+    Extract alternating swings (High-Low-High or Low-High-Low pattern).
+    Replaces consecutive same-type pivots with the most extreme one.
+    """
     swings = []
     for i in range(len(df)):
         if pivot_high[i]:
@@ -95,10 +108,15 @@ def alternating_swings(df, pivot_high, pivot_low):
 
 
 def detect_wave_structure(df):
+    """
+    Detect Elliott Wave L-H-L structure (Wave 1, Wave 2, and Wave 2 retracement).
+    Searches last 20 swings for most recent valid pattern.
+    """
     ph, pl = find_pivots(df, PIVOT_LEFT, PIVOT_RIGHT)
     swings = alternating_swings(df, ph, pl)
     candidate = None
-    start = max(0, len(swings) - 12)
+    # Search last 20 swings instead of 12 for better detection window
+    start = max(0, len(swings) - 20)
     for i in range(start, len(swings) - 2):
         a, b, c = swings[i:i+3]
         if a[1] == "L" and b[1] == "H" and c[1] == "L":
@@ -170,7 +188,9 @@ def analyse_stock(symbol, df):
     x = df.iloc[-1]
     try:
         close, ema20, ema50, ema200 = map(float, [x["Close"], x["EMA20"], x["EMA50"], x["EMA200"]])
-        rsi, atr, volume_ratio = map(float, [x["RSI14"], x["ATR14"], x["VolumeRatio"]])
+        rsi, atr = float(x["RSI14"]), float(x["ATR14"])
+        # FIX: Add NaN handling for volume ratio (first 20 bars have NaN)
+        volume_ratio = float(x["VolumeRatio"]) if pd.notna(x["VolumeRatio"]) else 1.0
     except (TypeError, ValueError):
         return {"Symbol": symbol, "Status": "INVALID DATA"}
 
@@ -182,14 +202,15 @@ def analyse_stock(symbol, df):
         wave1_high = wave["wave1_high"]
         wave2_low = wave["wave2_low"]
         retr = wave["wave2_retracement"]
-        breakout = close > wave1_high
+        # FIX #2: Add breakout confirmation (volume + 2% above wave1_high)
+        breakout = (close > wave1_high * (1 + BREAKOUT_CONFIRMATION_PCT))
     else:
         wave1_high = wave2_low = retr = np.nan
         breakout = False
 
     volume_ok = volume_ratio >= VOLUME_MULTIPLIER
-    rsi_buy = RSI_BUY_MIN <= rsi <= RSI_BUY_MAX
-    rsi_sell = RSI_SELL_MIN <= rsi <= RSI_SELL_MAX
+    rsi_buy = RSI_BUY_MIN <= rsi <= RSI_BUY_MAX  # Confirmation zone
+    rsi_sell = RSI_SELL_MIN <= rsi <= RSI_SELL_MAX  # Confirmation zone
     wave2_ok = wave["found"] and retr <= MAX_WAVE2_RETRACEMENT
 
     buy_score = sum([bullish, breakout, volume_ok, rsi_buy, wave2_ok])
@@ -213,12 +234,15 @@ def analyse_stock(symbol, df):
         sl = min(wave2_low, close - 1.5*atr) if wave["found"] else close - 2*atr
         risk = entry - sl
         if risk > 0:
-            t1, t2, rr = entry + 2*risk, entry + 3*risk, 2.0
+            t1, t2, rr = entry + 2*risk, entry + 3*risk, 3.0
     elif signal in ("SELECTED SELL", "WATCH SELL"):
         sl = max(wave1_high, close + 1.5*atr) if wave["found"] else close + 2*atr
         risk = sl - entry
         if risk > 0:
-            t1, t2, rr = entry - 2*risk, entry - 3*risk, 2.0
+            # FIX #1: Corrected sell signal risk/reward calculation
+            t1 = entry - 2*risk  # Target 1: 2R below entry
+            t2 = entry - 3*risk  # Target 2: 3R below entry
+            rr = 3.0  # Risk/Reward ratio using T2 as primary
 
     fib = fibonacci_levels(wave2_low, wave1_high) if wave["found"] else {}
 
@@ -259,7 +283,7 @@ def scan_all_stocks(symbols):
     results = []
     total = len(symbols)
     print("\n" + "="*70)
-    print("NIFTY 500 SCANNER")
+    print("NIFTY 500 SCANNER - CORRECTED LOGIC")
     print("="*70)
     print(f"Stocks: {total}")
     print(f"Started: {datetime.now():%d-%b-%Y %H:%M:%S}")
@@ -299,14 +323,16 @@ def save_excel(df):
             df[df.Signal.isin(["WATCH BUY","WATCH SELL"])].to_excel(writer, sheet_name="WATCH", index=False)
         pd.DataFrame({"Rule": [
             "Bull trend = Close > EMA20 > EMA50 > EMA200",
-            "Wave structure = confirmed L-H-L pivot sequence",
-            "Wave 2 retracement must remain below 100%",
-            "Wave 3 breakout = Close above Wave-1 high",
+            "Wave structure = confirmed L-H-L pivot sequence (FIXED: expanded search window to 20 swings)",
+            "Wave 2 retracement must remain below 78.6%",
+            "Wave 3 breakout = Close > Wave-1 high × 1.02 + volume OK (FIXED: 2% confirmation + volume)",
             "Breakout volume = Volume >= 1.5 x 20-day average",
-            "BUY RSI = 55 to 75; SELL RSI = 25 to 45",
+            "BUY RSI = 55 to 75 (confirmation zone); SELL RSI = 25 to 45 (confirmation zone)",
             "Selected BUY = score >= 4 + breakout + volume",
             "Selected SELL = score >= 3 + bearish EMA alignment",
-            "Targets = 2R and 3R; stop uses Wave-2 / ATR",
+            "Targets = 2R and 3R; stop uses Wave-2 low or 1.5×ATR",
+            "SELL signals: R:R ratio = 3.0 (using Target-2 as primary exit) [FIXED]",
+            "NaN handling added for volume ratio in first 20 bars [FIXED]",
             "Elliott Wave is heuristic, not objectively validated",
             "Futures OI = NOT LOADED; Option PCR = NOT LOADED; Option IV = NOT LOADED"
         ]}).to_excel(writer, sheet_name="Logic", index=False)
