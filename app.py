@@ -18,7 +18,7 @@ RESULT_DIR.mkdir(exist_ok=True)
 def load_latest_result(kind):
     """Load the most recent timestamped result file for a given scan kind."""
     pattern = RESULT_DIR / f"{kind}_*.csv"
-    files = sorted(glob.glob(str(pattern)))
+    files = sorted(glob.glob(str(pattern)), key=lambda x: Path(x).stat().st_mtime)
     
     if not files:
         return pd.DataFrame()
@@ -100,7 +100,7 @@ with tab1:
     else:
         st.success(f"Loaded {len(df)} stocks")
         signal = st.selectbox("Signal", ["ALL", "SELECTED BUY", "SELECTED SELL", "WATCH BUY", "WATCH SELL", "NOT SELECTED"], key="s1")
-        view = df if signal == "ALL" or "Signal" not in df.columns else df[df["Signal"] == signal]
+        view = df if (signal == "ALL" or "Signal" not in df.columns) else df[df["Signal"] == signal]
         st.dataframe(view, use_container_width=True, hide_index=True)
         st.download_button("Download CSV", view.to_csv(index=False), "Nifty500_0930.csv", "text/csv")
 
@@ -111,7 +111,7 @@ with tab2:
     else:
         st.success(f"Loaded {len(df)} stocks")
         signal = st.selectbox("Signal", ["ALL", "CONFIRMED BUY", "CONFIRMED SELL", "NEW BUY", "NEW SELL", "REJECTED", "WATCH"], key="s2")
-        view = df if signal == "ALL" or "Confirmation" not in df.columns else df[df["Confirmation"] == signal]
+        view = df if (signal == "ALL" or "Confirmation" not in df.columns) else df[df["Confirmation"] == signal]
         st.dataframe(view, use_container_width=True, hide_index=True)
         st.download_button("Download CSV", view.to_csv(index=False), "Nifty500_1000_confirmation.csv", "text/csv")
 
