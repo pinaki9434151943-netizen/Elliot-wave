@@ -9,7 +9,7 @@ sys.path.insert(0, str(ROOT))
 import scanner_core
 
 RESULTS = ROOT / "results"
-RESULTS.mkdir(exist_ok=True)
+RESULTS.mkdir(parents=True, exist_ok=True)
 
 def run():
     symbols = scanner_core.read_symbols()
@@ -35,23 +35,45 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     df = run()
-    df.to_csv(RESULTS / f"scan_{args.slot}.csv", index=False)
 
+    # For slot "1000" optionally compare with 0930 results and add Confirmation
     if args.slot == "1000":
         old = RESULTS / "scan_0930.csv"
         if old.exists():
             a = pd.read_csv(old)
-            if "Signal" in a.columns and "Signal" in df.columns:
-                old_map = dict(zip(a["Symbol"], a["Signal"]))
+
+            # Ensure required columns exist in both dataframes
+            if {"Symbol", "Signal"}.issubset(a.columns) and {"Symbol", "Signal"}.issubset(df.columns):
+                # Normalize old signals and symbols: coerce NaN -> "", strip and upper-case signals
+                old_signals = a["Signal"].fillna("").astype(str).str.strip().str.upper()
+                old_symbols = a["Symbol"].fillna("").astype(str).str.strip()
+                old_map = dict(zip(old_symbols, old_signals))
+
+                # Normalize new signals and symbols for safe comparison (temporary columns)
+                df["_SIG_NORM"] = df["Signal"].fillna("").astype(str).str.strip().str.upper()
+                df["_SYM_STR"] = df["Symbol"].fillna("").astype(str).str.strip()
+
                 def confirm(row):
-                    s = row.get("Signal", "")
-                    prev = old_map.get(row.get("Symbol", ""), "")
-                    if s == "SELECTED BUY" and prev == "SELECTED BUY": return "CONFIRMED BUY"
-                    if s == "SELECTED SELL" and prev == "SELECTED SELL": return "CONFIRMED SELL"
-                    if s == "SELECTED BUY": return "NEW BUY"
-                    if s == "SELECTED SELL": return "NEW SELL"
-                    if prev in ("SELECTED BUY","SELECTED SELL") and s not in ("SELECTED BUY","SELECTED SELL"):
+                    s = row.get("_SIG_NORM", "")  # normalized current signal
+                    prev = old_map.get(row.get("_SYM_STR", ""), "")
+                    if s == "SELECTED BUY" and prev == "SELECTED BUY":
+                        return "CONFIRMED BUY"
+                    if s == "SELECTED SELL" and prev == "SELECTED SELL":
+                        return "CONFIRMED SELL"
+                    if s == "SELECTED BUY":
+                        return "NEW BUY"
+                    if s == "SELECTED SELL":
+                        return "NEW SELL"
+                    if prev in ("SELECTED BUY", "SELECTED SELL") and s not in ("SELECTED BUY", "SELECTED SELL"):
                         return "REJECTED"
                     return "WATCH"
+
                 df["Confirmation"] = df.apply(confirm, axis=1)
-                df.to_csv(RESULTS / "scan_1000.csv", index=False)
+                # drop temp columns
+                df.drop(columns=["_SIG_NORM", "_SYM_STR"], inplace=True)
+            else:
+                # If required columns are missing in either old or new, default to WATCH
+                df["Confirmation"] = "WATCH"
+
+    # Write the final CSV once
+    df.to_csv(RESULTS / f"scan_{args.slot}.csv", index=False)
